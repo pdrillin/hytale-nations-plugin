@@ -7,7 +7,6 @@ import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.CommandSender;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
-import com.hypixel.hytale.server.core.command.system.arguments.types.MultiArgumentType;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractAsyncCommand;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -54,7 +53,7 @@ public class NationCreateCommand extends AbstractAsyncCommand {
                     }
 
                     try {
-                        var nation = manager.createNation(playerRef.getUuid(), nationName);
+                        var nation = manager.createNation(playerRef.getUuid(), nationName, "");
                         player.sendMessage(Message.raw("§aNation créée: §f" + nation.getName() + " §7(statut: Hameau)"));
                     } catch (IllegalArgumentException e) {
                         player.sendMessage(Message.raw("§c" + e.getMessage()));
@@ -70,7 +69,6 @@ public class NationCreateCommand extends AbstractAsyncCommand {
 
     private static String extractNationName(CommandContext ctx) {
         String input = ctx.getInputString();
-        if (input == null) return null;
 
         // On cherche " create " (avec espaces) pour éviter des faux positifs
         String lower = input.toLowerCase();

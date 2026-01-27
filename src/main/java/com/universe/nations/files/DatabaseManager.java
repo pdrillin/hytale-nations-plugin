@@ -41,6 +41,7 @@ public class DatabaseManager {
                   name_lower TEXT NOT NULL UNIQUE,
                   owner_uuid TEXT NOT NULL,
                   level INTEGER NOT NULL,
+                  description TEXT NOT NULL DEFAULT '',
                   created_at INTEGER NOT NULL
                 )
             """);
@@ -69,6 +70,7 @@ public class DatabaseManager {
                         rs.getString("name"),
                         UUID.fromString(rs.getString("owner_uuid")),
                         rs.getInt("level"),
+                        rs.getString("description"),
                         rs.getLong("created_at")
                 );
                 out.put(id, n);
@@ -96,15 +98,16 @@ public class DatabaseManager {
 
     public void saveNation(NationInfo nation) {
         try (PreparedStatement ps = connection.prepareStatement("""
-            REPLACE INTO nations (id, name, name_lower, owner_uuid, level, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            REPLACE INTO nations (id, name, name_lower, owner_uuid, level, description, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """)) {
             ps.setString(1, nation.getId().toString());
             ps.setString(2, nation.getName());
             ps.setString(3, nation.getNameLower());
             ps.setString(4, nation.getOwnerUuid().toString());
             ps.setInt(5, nation.getLevel());
-            ps.setLong(6, nation.getCreatedAt());
+            ps.setString(6, nation.getDescription());
+            ps.setLong(7, nation.getCreatedAt());
             ps.executeUpdate();
         } catch (SQLException e) {
             e.printStackTrace();
