@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'org.jetbrains.gradle.plugin.idea-ext' version '1.3'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 import org.gradle.internal.os.OperatingSystem
@@ -33,6 +34,10 @@ else if (!file(project.findProperty('hytaleHome')).exists()) {
     throw new GradleException("Failed to find Hytale at the expected location. Please make sure you have installed the game. The expected location can be changed using the hytale_home property. Currently looking in ${project.findProperty('hytaleHome')}")
 }
 
+repositories {
+    mavenCentral()
+}
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(java_version)
     withSourcesJar()
@@ -48,7 +53,8 @@ javadoc {
 // compile against their code. This requires you to have Hytale installed using
 // the official launcher for now.
 dependencies {
-    implementation(files("$hytaleHome/install/$patchline/package/game/latest/Server/HytaleServer.jar"))
+    implementation(files("$hytaleHome/install/$patchline/package/game/$game_build/Server/HytaleServer.jar"))
+    implementation("org.xerial:sqlite-jdbc:3.46.1.0")
 }
 
 // Create the working directory to run the server if it does not already exist.
@@ -60,26 +66,28 @@ if (!serverRunDir.exists()) {
 // Updates the manifest.json file with the latest properties defined in the
 // build.properties file. Currently we update the version and if packs are
 // included with the plugin.
-tasks.register('updatePluginManifest') {
-    def manifestFile = file('src/main/resources/manifest.json')
-    doLast {
-        if (!manifestFile.exists()) {
-            throw new GradleException("Could not find manifest.json at ${manifestFile.path}!")
-        }
-        def manifestJson = new groovy.json.JsonSlurper().parseText(manifestFile.text)
-        manifestJson.Version = version
-        manifestJson.IncludesAssetPack = includes_pack.toBoolean()
-        manifestFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(manifestJson))
+processResources {
+    def props = [
+        plugin_name     : (findProperty("plugin_name") ?: project.name).toString(),
+        plugin_group    : (findProperty("plugin_group") ?: project.group ?: "").toString(),
+        plugin_version  : (findProperty("plugin_version") ?: project.version ?: "0.0.0").toString(),
+        entry_point     : (findProperty("entry_point") ?: "").toString(),
+        mod_description : (findProperty("mod_description") ?: "").toString(),
+        website         : (findProperty("website") ?: "").toString(),
+        server_version  : (findProperty("server_version") ?: "*").toString(),
+        includes_pack   : (findProperty("includes_pack") ?: "false").toString().toBoolean()
+    ]
+
+    inputs.properties(props)
+
+    filesMatching("manifest.json") {
+        expand(props)
     }
 }
 
-// Makes sure the plugin manifest is up to date.
-tasks.named('processResources') {
-    dependsOn 'updatePluginManifest'
-}
 
 def createServerRunArguments(String srcDir) {
-    def programParameters = '--allow-op --disable-sentry --assets="' + "${hytaleHome}/install/$patchline/package/game/latest/Assets.zip" + '"'
+    def programParameters = '--allow-op --disable-sentry --assets="' + "${hytaleHome}/install/$patchline/package/game/$game_build/Assets.zip" + '"'
     def modPaths = []
     if (includes_pack.toBoolean()) {
         modPaths << srcDir
@@ -128,4 +136,16 @@ tasks.register('generateVSCodeLaunch') {
         ]
         launchFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(launchConfig))
     }
+}
+
+tasks.named('shadowJar') {
+    archiveClassifier.set('') // remplace le jar normal (pas de "-all")
+    mergeServiceFiles()       // utile si certaines libs utilisent META-INF/services
+    //minimize()                // optionnel: enlève les classes non utilisées (peut poser souci avec réflexion)
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+}
+
+// Si tu veux que `./gradlew build` sorte directement le fat jar :
+tasks.named('build') {
+    dependsOn tasks.named('shadowJar')
 }
