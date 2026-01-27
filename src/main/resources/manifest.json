@@ -1,14 +1,14 @@
 {
-    "Group": "Example",
-    "Name": "ExamplePlugin",
-    "Version": "0.0.2",
-    "Description": "An example plugin for HyTale!",
+    "Group": "Universe",
+    "Name": "Nations",
+    "Version": "0.0.1",
+    "Description": "A nations mod. To create and manage Town/Nation and protect Build.",
     "Authors": [
         {
-            "Name": "It's you!"
+            "Name": "Universe"
         }
     ],
-    "Website": "example.org",
+    "Website": "universe.fr",
     "ServerVersion": "*",
     "Dependencies": {
         
@@ -17,6 +17,6 @@
         
     },
     "DisabledByDefault": false,
-    "Main": "org.example.plugin.ExamplePlugin",
+    "Main": "com.universe.nations.Main",
     "IncludesAssetPack": true
 }
