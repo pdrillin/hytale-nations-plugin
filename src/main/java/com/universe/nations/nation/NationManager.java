@@ -50,17 +50,11 @@ public class NationManager {
     }
 
     public NationInfo createNation(UUID ownerUuid, String rawName, String rawDesc) {
-        String name = rawName.trim();
+        String name = validateAndNormalizeName(rawName);
         String lower = name.toLowerCase();
-        String desc = rawDesc.trim();
+        String desc = normalizeDescription(rawDesc);
 
-        if (name.length() < 3 || name.length() > 20) {
-            throw new IllegalArgumentException("Le nom doit faire entre 3 et 20 caractères.");
-        }
-        if (!name.matches("[a-zA-Z0-9 _-]+")) {
-            throw new IllegalArgumentException("Caractères invalides (autorisé: lettres, chiffres, espace, _ et -).");
-        }
-        if (memberToNation.containsKey(ownerUuid)) {
+        if (isInNation(ownerUuid)) {
             throw new IllegalArgumentException("Tu es déjà dans une nation.");
         }
         if (nationIdByNameLower.containsKey(lower)) {
@@ -73,6 +67,7 @@ public class NationManager {
                 ownerUuid,
                 NationLevel.HAMLET.id,
                 desc, //description
+                System.currentTimeMillis(),
                 System.currentTimeMillis());
 
         // Update RAM
@@ -102,45 +97,48 @@ public class NationManager {
     public void updateNationInfo(UUID actorUuid, UUID nationId, String rawName, String rawDescription) {
         NationInfo nation = nationsById.get(nationId);
         if (nation == null) throw new IllegalArgumentException("Nation introuvable.");
+        if (!isOwner(actorUuid, nation)) throw new IllegalArgumentException("Tu n'es pas le chef de cette nation.");
 
-        if (!canModifyNation(actorUuid, nation)) {
-            throw new IllegalArgumentException("Tu n'es pas le chef de cette nation.");
-        }
-
-        String name = rawName == null ? "" : rawName.trim();
-        String description = rawDescription == null ? "" : rawDescription.trim().replace("\n", "");
-
-        // Validation nom
-        if (name.length() < 3 || name.length() > 20) {
-            throw new IllegalArgumentException("Le nom doit faire entre 3 et 20 caractères.");
-        }
-        if (!name.matches("[a-zA-Z0-9 _-]+")) {
-            throw new IllegalArgumentException("Caractères invalides (autorisé: lettres, chiffres, espace, _ et -).");
-        }
-
-        // Validation description (optionnel mais pratique)
-        if (description.length() > 120) {
-            throw new IllegalArgumentException("La description ne doit pas dépasser 120 caractères.");
-        }
-
+        String name = validateAndNormalizeName(rawName);
         String newLower = name.toLowerCase();
+        String description = normalizeDescription(rawDescription);
+
         UUID existing = nationIdByNameLower.get(newLower);
         if (existing != null && !existing.equals(nationId)) {
             throw new IllegalArgumentException("Ce nom de nation est déjà pris.");
         }
 
-        // Mise à jour index name_lower si changement
         String oldLower = nation.getNameLower();
         if (!oldLower.equals(newLower)) {
             nationIdByNameLower.remove(oldLower);
             nationIdByNameLower.put(newLower, nationId);
         }
 
-        // Mise à jour objet
-        nation.setName(name);              // nécessite NationInfo.setName(...)
-        nation.setDescription(description);// nécessite NationInfo.setDescription(...)
+        nation.setName(name);
+        nation.setDescription(description);
 
-        // Persist
         db.saveNation(nation);
+    }
+
+    public boolean isInNation(UUID playerUuid) { return memberToNation.containsKey(playerUuid); }
+
+    public boolean isOwner(UUID playerUuid, NationInfo nation) { return nation != null && nation.getOwnerUuid().equals(playerUuid); }
+
+    private String validateAndNormalizeName(String rawName) {
+        String name = rawName == null ? "" : rawName.trim();
+
+        if (name.length() < 3 || name.length() > 20) {
+            throw new IllegalArgumentException("Le nom doit faire entre 3 et 20 caractères.");
+        }
+        if (!name.matches("[a-zA-Z0-9 _-]+")) {
+            throw new IllegalArgumentException("Caractères invalides (autorisé: lettres, chiffres, espace, _ et -).");
+        }
+        return name;
+    }
+
+    private String normalizeDescription(String raw) {
+        String d = raw == null ? "" : raw.trim().replace("\n", "");
+        if (d.length() > 120) throw new IllegalArgumentException("La description ne doit pas dépasser 120 caractères.");
+        return d;
     }
 }
