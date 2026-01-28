@@ -110,6 +110,7 @@ public class DatabaseManager {
             ps.setInt(5, nation.getLevel());
             ps.setString(6, nation.getDescription());
             ps.setLong(7, nation.getCreatedAt());
+            ps.setLong(7, nation.getUpdatedAt());
             ps.executeUpdate();
         } catch (SQLException e) {
             e.printStackTrace();
