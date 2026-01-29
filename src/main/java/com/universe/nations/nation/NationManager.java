@@ -1,6 +1,9 @@
 package com.universe.nations.nation;
 
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.Universe;
 import com.universe.nations.files.DatabaseManager;
 
 import java.util.*;
@@ -16,6 +19,9 @@ public class NationManager {
     private final Map<UUID, NationInfo> nationsById = new ConcurrentHashMap<>();
     private final Map<String, UUID> nationIdByNameLower = new ConcurrentHashMap<>();
     private final Map<UUID, UUID> memberToNation = new ConcurrentHashMap<>();
+    private final Map<UUID, Map<UUID, NationRole>> membersByNationId = new ConcurrentHashMap<>();
+    private final Map<UUID, NationInvite> invitesByRecipient = new ConcurrentHashMap<>();
+
 
     public NationManager(HytaleLogger logger, DatabaseManager db) {
         this.logger = logger;
@@ -36,6 +42,13 @@ public class NationManager {
         }
 
         memberToNation.putAll(db.loadMemberToNation());
+
+        for (MemberEntry entry : db.loadNationMembers()) {
+            memberToNation.put(entry.memberUuid(), entry.nationId());
+            membersByNationId
+                    .computeIfAbsent(entry.nationId(), k -> new ConcurrentHashMap<>())
+                    .put(entry.memberUuid(), entry.role());
+        }
 
         logger.at(Level.INFO).log("Loaded nations=" + nationsById.size() + " members=" + memberToNation.size());
     }
@@ -140,5 +153,50 @@ public class NationManager {
         String d = raw == null ? "" : raw.trim().replace("\n", "");
         if (d.length() > 120) throw new IllegalArgumentException("La description ne doit pas dépasser 120 caractères.");
         return d;
+    }
+
+    public NationRole getRole(UUID nationId, UUID memberUuid) {
+        var map = membersByNationId.get(nationId);
+        if (map == null) return null;
+        return map.get(memberUuid);
+    }
+
+    public void invite(UUID actorUuid, String targetUsername) {
+        NationInfo nation = getNationOf(actorUuid);
+        if (nation == null) throw new IllegalArgumentException("Tu n'as pas de nation.");
+
+        NationRole actorRole = getRole(nation.getId(), actorUuid);
+        if (actorRole == null || !actorRole.canInvite()) throw new IllegalArgumentException("Tu n'as pas le droit d'inviter.");
+
+        PlayerRef target = Universe.get().getPlayers().stream()
+                .filter(p -> p.getUsername().equalsIgnoreCase(targetUsername))
+                .findFirst().orElse(null);
+
+        if (target == null) throw new IllegalArgumentException("Joueur introuvable ou hors ligne.");
+        if (memberToNation.containsKey(target.getUuid())) throw new IllegalArgumentException("Ce joueur est déjà dans une nation.");
+
+        NationInvite invite = new NationInvite(target.getUuid(), nation.getId(), actorUuid, System.currentTimeMillis());
+        invitesByRecipient.put(target.getUuid(), invite);
+
+        target.sendMessage(Message.raw("Tu as été invité dans la nation " + nation.getName() + ". Fais /nation accept"));
+    }
+
+    public void acceptInvite(UUID recipientUuid) {
+        NationInvite inv = invitesByRecipient.get(recipientUuid);
+        if (inv == null) throw new IllegalArgumentException("Aucune invitation.");
+
+        if (memberToNation.containsKey(recipientUuid)) throw new IllegalArgumentException("Tu es déjà dans une nation.");
+
+        NationInfo nation = nationsById.get(inv.nationId());
+        if (nation == null) throw new IllegalArgumentException("Nation introuvable.");
+
+        // add member
+        memberToNation.put(recipientUuid, inv.nationId());
+
+        membersByNationId.computeIfAbsent(inv.nationId(), k -> new ConcurrentHashMap<>())
+                .put(recipientUuid, NationRole.MEMBER);
+
+        db.addMember(inv.nationId(), recipientUuid, NationRole.MEMBER.name());
+        invitesByRecipient.remove(recipientUuid);
     }
 }
